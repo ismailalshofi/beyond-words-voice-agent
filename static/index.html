@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Realtime Voice Agent</title>
+  <style>
+    :root {
+      --bg: #f6f7f9; --panel: #ffffff; --text: #1b1f24; --muted: #69707a; --border: #dfe3e8;
+      --accent: #2f6fed; --accent-text: #ffffff; --danger: #d64545; --user: #e8f0fe; --bot: #f1f3f5;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111418; --panel: #1a1e24; --text: #e6e9ed; --muted: #8b939e; --border: #2b313a;
+        --accent: #5b8cff; --accent-text: #0b0d10; --danger: #ff6b6b; --user: #1f2d4a; --bot: #22272f;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
+    .layout { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+    aside { border-right: 1px solid var(--border); padding: 16px; background: var(--panel); }
+    main { padding: 24px; max-width: 960px; width: 100%; }
+    h1 { font-size: 16px; margin: 0 0 16px; }
+    h2 { font-size: 18px; margin: 0 0 16px; }
+    button { font: inherit; border: 1px solid var(--border); background: var(--panel); color: var(--text); border-radius: 8px; padding: 8px 14px; cursor: pointer; }
+    button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+    button.danger { color: var(--danger); }
+    button:disabled { opacity: .5; cursor: default; }
+    input, textarea { font: inherit; width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); }
+    textarea { resize: vertical; min-height: 64px; }
+    label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 4px; }
+    .list { list-style: none; padding: 0; margin: 12px 0 0; }
+    .list li { padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+    .list li.active { background: var(--user); }
+    .row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+    .actions { display: flex; gap: 8px; margin-top: 16px; }
+    .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin: 24px 0 16px; }
+    .tabs button { border: none; border-bottom: 2px solid transparent; border-radius: 0; background: none; }
+    .tabs button.active { border-bottom-color: var(--accent); }
+    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+    .messages { height: 360px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+    .msg { padding: 8px 12px; border-radius: 10px; max-width: 80%; white-space: pre-wrap; }
+    .msg.user { align-self: flex-end; background: var(--user); }
+    .msg.assistant { align-self: flex-start; background: var(--bot); }
+    .msg.error { align-self: center; color: var(--danger); }
+    .composer { display: flex; gap: 8px; }
+    .status { color: var(--muted); font-size: 13px; }
+    .call-controls { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+    .interim { color: var(--muted); font-style: italic; min-height: 1.4em; }
+    .check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+    .check input { width: auto; }
+    .empty { color: var(--muted); }
+    .hidden { display: none; }
+    @media (max-width: 720px) {
+      .layout { grid-template-columns: 1fr; }
+      aside { border-right: none; border-bottom: 1px solid var(--border); }
+      main { padding: 16px; }
+      .row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside>
+      <h1>Assistants</h1>
+      <button class="primary" id="new-assistant">New assistant</button>
+      <ul class="list" id="assistant-list"></ul>
+    </aside>
+
+    <main>
+      <p class="empty" id="empty-state">Create an assistant to get started.</p>
+
+      <section id="editor" class="hidden">
+        <h2 id="editor-title">New assistant</h2>
+        <form id="assistant-form" class="panel">
+          <label for="name">Name</label>
+          <input id="name" name="name" required maxlength="100">
+
+          <label for="system_prompt">System prompt</label>
+          <textarea id="system_prompt" name="system_prompt" rows="6"></textarea>
+
+          <label for="call_greeting">Call greeting <span>(left empty, the assistant writes its own)</span></label>
+          <input id="call_greeting" name="call_greeting">
+
+          <label for="chat_greeting">Chat greeting <span>(left empty, the assistant writes its own)</span></label>
+          <input id="chat_greeting" name="chat_greeting">
+
+          <div class="row">
+            <div>
+              <label for="voice_id">ElevenLabs voice ID</label>
+              <input id="voice_id" name="voice_id" placeholder="Server default">
+            </div>
+            <div>
+              <label for="language">Language</label>
+              <input id="language" name="language" value="en">
+            </div>
+            <div>
+              <label for="llm_model">LLM model</label>
+              <input id="llm_model" name="llm_model" placeholder="Server default">
+            </div>
+          </div>
+
+          <div class="actions">
+            <button type="submit" class="primary">Save</button>
+            <button type="button" class="danger hidden" id="delete-assistant">Delete</button>
+          </div>
+        </form>
+
+        <div id="session-area" class="hidden">
+          <div class="tabs">
+            <button class="active" data-tab="call">Call</button>
+            <button data-tab="chat">Chat</button>
+          </div>
+
+          <div id="tab-call" class="panel">
+            <div class="call-controls">
+              <button class="primary" id="call-button">Start call</button>
+              <span class="status" id="call-status">Not connected</span>
+              <label class="check"><input type="checkbox" id="headphones"> I'm using headphones (lets you interrupt)</label>
+            </div>
+            <div class="messages" id="call-transcript"></div>
+            <div class="interim" id="call-interim"></div>
+          </div>
+
+          <div id="tab-chat" class="panel hidden">
+            <div class="messages" id="chat-messages"></div>
+            <form class="composer" id="chat-form">
+              <input id="chat-input" placeholder="Type a message" autocomplete="off">
+              <button class="primary" type="submit">Send</button>
+              <button type="button" id="chat-reset">New chat</button>
+            </form>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
