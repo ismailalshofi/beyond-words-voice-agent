@@ -1,7 +1,9 @@
+import json
 from datetime import datetime
+from pathlib import Path
 from typing import Literal
 
-ServiceType = Literal["transcription", "llm", "tts", "client", "interruption"]
+ServiceType = Literal["transcription", "llm", "tts", "client", "interruption", "policy"]
 
 
 class CallLogger:
@@ -16,6 +18,13 @@ class CallLogger:
 
     def reset(self) -> None:
         self.logs.clear()
+
+    def save(self, directory: str | Path, call_id: str) -> Path:
+        """Write the call's events to disk, so a bad call can be read and replayed later."""
+        path = Path(directory) / f"{datetime.now():%Y%m%d-%H%M%S}-{call_id}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(self.logs, indent=2, ensure_ascii=False), encoding="utf-8")
+        return path
 
     def get_logs(self) -> list[dict]:
         return self.logs.copy()

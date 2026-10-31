@@ -1,0 +1,32 @@
+name = "Stopping mid-thought gets an 'mm', not an answer"
+
+[[event]]
+at = 0
+speech = true
+
+[[event]]
+at = 400
+interim = "So I was"
+
+[[event]]
+at = 1400
+final = "So I was thinking that"
+
+[[event]]
+at = 1500
+speech = false
+
+# The sentence isn't finished, so the agent waits through a normal pause,
+# says "mm" at 1.5x the usual pause, and only answers at 3x
+[[expect]]
+never = "respond"
+before = 3500
+
+[[expect]]
+action = "backchannel"
+between = [2500, 2650]
+times = 1
+
+[[expect]]
+action = "respond"
+between = [3550, 3700]

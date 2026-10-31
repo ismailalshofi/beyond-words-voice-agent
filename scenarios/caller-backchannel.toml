@@ -1,0 +1,23 @@
+name = "A 'yeah' while the agent talks is not a new turn"
+
+[[event]]
+at = 0
+agent = true
+
+[[event]]
+at = 500
+interim = "yeah"
+
+[[event]]
+at = 700
+final = "yeah"
+
+[[event]]
+at = 3000
+agent = false
+
+[[expect]]
+never = "respond"
+
+[[expect]]
+never = "stop"

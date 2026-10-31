@@ -1,0 +1,15 @@
+name = "After a long silence the agent checks in, once"
+duration_ms = 30000
+
+[[event]]
+at = 0
+agent = true
+
+[[event]]
+at = 2000
+agent = false
+
+[[expect]]
+action = "nudge"
+between = [9950, 10100]
+times = 1

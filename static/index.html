@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Realtime Voice Agent</title>
+  <title>Beyond Words</title>
   <style>
     :root {
       --bg: #f6f7f9; --panel: #ffffff; --text: #1b1f24; --muted: #69707a; --border: #dfe3e8;
@@ -50,12 +50,23 @@
     .check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
     .check input { width: auto; }
     .empty { color: var(--muted); }
+    .call-grid { display: grid; grid-template-columns: 1fr 280px; gap: 16px; }
+    .state-panel { border-left: 1px solid var(--border); padding-left: 16px; font-size: 13px; }
+    .state-panel h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 8px; }
+    .state-panel table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+    .state-panel td { padding: 3px 0; vertical-align: top; }
+    .state-panel td:first-child { color: var(--muted); width: 45%; }
+    .decision { font-weight: 600; padding: 6px 10px; border-radius: 8px; background: var(--bot); }
+    .decision:not([data-action="wait"]) { background: var(--user); color: var(--accent); }
+    .decision-log { list-style: none; padding: 0; margin: 8px 0 0; color: var(--muted); font-family: ui-monospace, monospace; font-size: 12px; }
     .hidden { display: none; }
     @media (max-width: 720px) {
       .layout { grid-template-columns: 1fr; }
       aside { border-right: none; border-bottom: 1px solid var(--border); }
       main { padding: 16px; }
       .row { grid-template-columns: 1fr; }
+      .call-grid { grid-template-columns: 1fr; }
+      .state-panel { border-left: none; padding-left: 0; border-top: 1px solid var(--border); padding-top: 16px; }
     }
   </style>
 </head>
@@ -118,8 +129,19 @@
               <span class="status" id="call-status">Not connected</span>
               <label class="check"><input type="checkbox" id="headphones"> I'm using headphones (lets you interrupt)</label>
             </div>
-            <div class="messages" id="call-transcript"></div>
-            <div class="interim" id="call-interim"></div>
+            <div class="call-grid">
+              <div>
+                <div class="messages" id="call-transcript"></div>
+                <div class="interim" id="call-interim"></div>
+              </div>
+              <div class="state-panel">
+                <h3>What the agent hears</h3>
+                <table id="state-table"></table>
+                <h3>Policy</h3>
+                <div class="decision" id="state-decision" data-action="wait">—</div>
+                <ol class="decision-log" id="decision-log"></ol>
+              </div>
+            </div>
           </div>
 
           <div id="tab-chat" class="panel hidden">

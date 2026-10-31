@@ -1,7 +1,7 @@
 [project]
-name = "realtime-voice-agent"
-version = "0.1.0"
-description = "Realtime voice and chat assistants over websockets: streaming STT -> LLM -> TTS with barge-in."
+name = "beyond-words-voice-agent"
+version = "0.2.0"
+description = "A real-time voice agent that listens to how you say something: signals -> state -> policy -> LLM."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -24,7 +24,7 @@ dev = [
 ]
 
 [tool.setuptools]
-packages = ["app", "app.routers", "app.services", "app.voice"]
+packages = ["app", "app.listening", "app.routers", "app.services", "app.voice"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

@@ -1,0 +1,77 @@
+name = "A slow talker gets more time before the agent answers"
+
+# Three pauses of 1.5 s in one turn teach the listener this caller's usual pause.
+# The last sentence is finished, but the agent still waits 1.5 s, not the default 0.7 s.
+
+[[event]]
+at = 0
+speech = true
+
+[[event]]
+at = 300
+interim = "Well"
+
+[[event]]
+at = 900
+final = "Well,"
+
+[[event]]
+at = 1000
+speech = false
+
+[[event]]
+at = 2500
+speech = true
+
+[[event]]
+at = 2800
+interim = "I think"
+
+[[event]]
+at = 3400
+final = "I think"
+
+[[event]]
+at = 3500
+speech = false
+
+[[event]]
+at = 5000
+speech = true
+
+[[event]]
+at = 5300
+interim = "we should"
+
+[[event]]
+at = 5900
+final = "we should start"
+
+[[event]]
+at = 6000
+speech = false
+
+[[event]]
+at = 7500
+speech = true
+
+[[event]]
+at = 7800
+interim = "next"
+
+[[event]]
+at = 8400
+final = "next week."
+
+[[event]]
+at = 8500
+speech = false
+
+[[expect]]
+never = "respond"
+before = 9900
+
+[[expect]]
+action = "respond"
+between = [9950, 10100]
+times = 1

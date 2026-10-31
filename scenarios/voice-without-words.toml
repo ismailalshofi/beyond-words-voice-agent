@@ -1,0 +1,17 @@
+name = "The mic heard a voice but the STT got no words"
+
+[[event]]
+at = 0
+speech = true
+
+[[event]]
+at = 1500
+speech = false
+
+[[expect]]
+action = "repair"
+between = [2850, 3000]
+times = 1
+
+[[expect]]
+never = "respond"

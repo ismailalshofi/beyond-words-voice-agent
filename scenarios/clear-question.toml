@@ -1,0 +1,26 @@
+name = "A clear question gets an answer after a normal pause"
+
+[[event]]
+at = 0
+speech = true
+
+[[event]]
+at = 400
+interim = "What time do you"
+
+[[event]]
+at = 1400
+final = "What time do you open tomorrow?"
+
+[[event]]
+at = 1500
+speech = false
+
+# The usual pause is 700 ms by default, and the question is clearly finished
+[[expect]]
+action = "respond"
+between = [2150, 2300]
+times = 1
+
+[[expect]]
+never = "backchannel"

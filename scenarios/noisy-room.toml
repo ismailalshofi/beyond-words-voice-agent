@@ -1,0 +1,21 @@
+name = "Background noise keeps the mic 'on', but the words stopped"
+
+# The voice activity never sees silence (a TV in the room). The STT stopped giving words
+# 3 s ago, so the agent trusts the words and answers instead of waiting forever.
+
+[[event]]
+at = 0
+speech = true
+
+[[event]]
+at = 300
+interim = "Can you"
+
+[[event]]
+at = 900
+final = "Can you hear me?"
+
+[[expect]]
+action = "respond"
+between = [3850, 4000]
+times = 1

@@ -1,14 +1,19 @@
 import asyncio
 import json
+from pathlib import Path
 
 import pytest
 from starlette.websockets import WebSocketState
 
+from app.listening.listener import Listener
+from app.listening.policy import Policy
 from app.models import Assistant
 from app.services import call as call_module
 from app.services.call import CallSession
 from app.voice.spoken_timeline import PCM16_16K_BYTES_PER_MS
 from app.voice.stt import DeepgramSTT
+
+POLICY = Policy.load(Path(__file__).resolve().parents[1] / "policy.toml")
 
 
 class FakeWebSocket:
@@ -25,7 +30,8 @@ class FakeWebSocket:
         self.audio.append(data)
 
     def types(self):
-        return [e["type"] for e in self.events]
+        # The live state panel updates are tested separately
+        return [e["type"] for e in self.events if e["type"] != "state"]
 
 
 class FakeTTS:
@@ -60,9 +66,6 @@ class FakeTTS:
 
 
 class FakeSTT:
-    def __init__(self):
-        self.resets = 0
-
     async def connect(self):
         pass
 
@@ -72,11 +75,32 @@ class FakeSTT:
     async def keep_alive(self):
         pass
 
-    def reset(self):
-        self.resets += 1
+    async def close(self):
+        pass
+
+
+class FakeClips:
+    """Every clip is just its kind, so the tests can see which line was played."""
+
+    async def warm(self):
+        pass
+
+    def get(self, kind):
+        return f"<{kind}>".encode()
 
     async def close(self):
         pass
+
+
+class FakeClock:
+    def __init__(self):
+        self.now = 0.0
+
+    def __call__(self):
+        return self.now
+
+    def advance(self, ms):
+        self.now += ms / 1000
 
 
 def _assistant(**overrides):
@@ -92,6 +116,27 @@ def _assistant(**overrides):
     )
     fields.update(overrides)
     return Assistant(**fields)
+
+
+def _session(tts=None, **overrides):
+    clock = FakeClock()
+    ws = FakeWebSocket()
+    session = CallSession(
+        _assistant(**overrides),
+        ws,
+        tts=tts or FakeTTS(),
+        stt=FakeSTT(),
+        policy=POLICY,
+        clips=FakeClips(),
+        listener=Listener(clock=clock),
+    )
+    return session, ws, clock
+
+
+@pytest.fixture(autouse=True)
+def slow_policy_loop(monkeypatch):
+    # The tests drive the policy themselves with session.decide() and a fake clock
+    monkeypatch.setattr(call_module.settings, "POLICY_TICK_MS", 60_000)
 
 
 @pytest.fixture
@@ -111,10 +156,20 @@ async def _wait_for_response(session):
     await session._respond_task
 
 
-async def test_greeting_is_spoken_and_added_to_history(fake_llm):
-    ws, tts, stt = FakeWebSocket(), FakeTTS(), FakeSTT()
-    session = CallSession(_assistant(), ws, tts=tts, stt=stt)
+async def _first_audio(ws):
+    while not ws.audio:
+        await asyncio.sleep(0)
 
+
+async def _greeted(session):
+    """Start the call and let the greeting play out."""
+    await session.start()
+    await _wait_for_response(session)
+    await session._handle_control({"type": "playback_done", "id": 1})
+
+
+async def test_greeting_is_spoken_and_added_to_history_after_playback(fake_llm):
+    session, ws, _ = _session()
     await session.start()
     await _wait_for_response(session)
 
@@ -128,14 +183,17 @@ async def test_greeting_is_spoken_and_added_to_history(fake_llm):
     await session.hang_up()
 
 
-async def test_utterance_triggers_llm_reply(fake_llm):
-    ws, tts, stt = FakeWebSocket(), FakeTTS(), FakeSTT()
-    session = CallSession(_assistant(), ws, tts=tts, stt=stt)
-    await session.start()
-    await _wait_for_response(session)
-    await session._handle_control({"type": "playback_done", "id": 1})
+async def test_finished_question_is_answered_after_a_normal_pause(fake_llm):
+    session, ws, clock = _session()
+    await _greeted(session)
 
-    await session.on_utterance("Can you help me?")
+    await session.on_final("Can you help me?")
+    clock.advance(500)
+    await session.decide()
+    assert session._response_id == 1, "answered before a normal pause was over"
+
+    clock.advance(300)
+    await session.decide()
     await _wait_for_response(session)
 
     assert fake_llm[0][0]["role"] == "system"
@@ -147,57 +205,50 @@ async def test_utterance_triggers_llm_reply(fake_llm):
     await session.hang_up()
 
 
-async def test_speech_while_speaking_interrupts(fake_llm):
-    ws, tts, stt = FakeWebSocket(), FakeTTS(hang=True), FakeSTT()
-    session = CallSession(_assistant(), ws, tts=tts, stt=stt)
+async def test_unfinished_sentence_gets_a_backchannel_not_an_answer(fake_llm):
+    session, ws, clock = _session()
+    await _greeted(session)
+
+    await session.on_final("So I was thinking that")
+    clock.advance(1100)
+    await session.decide()
+
+    assert ws.audio[-1] == b"<backchannel>"
+    assert fake_llm == []
+    await session.hang_up()
+
+
+async def test_two_words_while_speaking_interrupt(fake_llm):
+    session, ws, _ = _session(tts=FakeTTS(hang=True))
     await session.start()
-    await asyncio.sleep(0)  # let the greeting start streaming
+    await _first_audio(ws)
     assert session.is_agent_speaking
 
     await session.on_speech("wait a second")
 
     assert session._respond_task.cancelled()
     assert not session.is_agent_speaking
-    assert tts.cancelled == 1
-    assert stt.resets == 1
+    assert session.tts.cancelled == 1
     assert ws.events[-1] == {"type": "clear"}
-    # Interrupted before any audio played, so nothing was heard
-    assert list(session.history) == []
     await session.hang_up()
 
 
 async def test_single_word_does_not_barge_in(fake_llm):
-    ws, tts, stt = FakeWebSocket(), FakeTTS(hang=True), FakeSTT()
-    session = CallSession(_assistant(), ws, tts=tts, stt=stt)
+    session, _, _ = _session(tts=FakeTTS(hang=True))
     await session.start()
     await asyncio.sleep(0)
 
     await session.on_speech("yeah")
 
     assert session.is_agent_speaking
-    assert tts.cancelled == 0
-    await session.hang_up()
-
-
-async def test_completed_short_turn_still_interrupts(fake_llm):
-    ws, tts, stt = FakeWebSocket(), FakeTTS(hang=True), FakeSTT()
-    session = CallSession(_assistant(), ws, tts=tts, stt=stt)
-    await session.start()
-    await asyncio.sleep(0)
-
-    await session.on_utterance("stop")
-
-    assert tts.cancelled == 1
-    assert {"role": "user", "content": "stop"} in session.history
+    assert session.tts.cancelled == 0
     await session.hang_up()
 
 
 async def test_interrupted_reply_is_recorded_as_heard(fake_llm):
-    ws, tts, stt = FakeWebSocket(), FakeTTS(hang=True), FakeSTT()
-    session = CallSession(_assistant(), ws, tts=tts, stt=stt)
+    session, ws, _ = _session(tts=FakeTTS(hang=True))
     await session.start()
-    while not ws.audio:  # wait for the first audio chunk to go out
-        await asyncio.sleep(0)
+    await _first_audio(ws)
     # "Hi, Nova here." at 10 ms per character, and the caller has heard 75 ms of it
     session._first_audio_at -= (call_module.PLAYBACK_START_DELAY_MS + 75) / 1000
 
@@ -208,25 +259,22 @@ async def test_interrupted_reply_is_recorded_as_heard(fake_llm):
 
 
 async def test_speech_while_silent_does_not_interrupt(fake_llm):
-    ws, tts, stt = FakeWebSocket(), FakeTTS(), FakeSTT()
-    session = CallSession(_assistant(), ws, tts=tts, stt=stt)
-    await session.start()
-    await _wait_for_response(session)
-    await session._handle_control({"type": "playback_done", "id": 1})
+    session, ws, _ = _session()
+    await _greeted(session)
 
-    await session.on_speech("hello")
+    await session.on_speech("hello there")
 
-    assert tts.cancelled == 0
+    assert session.tts.cancelled == 0
     assert "clear" not in ws.types()
     await session.hang_up()
 
 
 async def test_stale_playback_ack_is_ignored(fake_llm):
-    ws, tts, stt = FakeWebSocket(), FakeTTS(), FakeSTT()
-    session = CallSession(_assistant(), ws, tts=tts, stt=stt)
-    await session.start()
-    await _wait_for_response(session)
-    await session.on_utterance("Hi")
+    session, _, clock = _session()
+    await _greeted(session)
+    await session.on_final("Hi.")
+    clock.advance(800)
+    await session.decide()
     await _wait_for_response(session)
 
     await session._handle_control({"type": "playback_done", "id": 1})
@@ -237,81 +285,82 @@ async def test_stale_playback_ack_is_ignored(fake_llm):
 
 
 async def test_empty_call_greeting_is_generated(fake_llm):
-    ws, tts, stt = FakeWebSocket(), FakeTTS(), FakeSTT()
-    session = CallSession(_assistant(call_greeting=""), ws, tts=tts, stt=stt)
-    await session.start()
-    await _wait_for_response(session)
+    session, _, _ = _session(call_greeting="")
+    await _greeted(session)
 
     assert fake_llm[0][-1]["content"] == call_module.llm.GREETING_INSTRUCTION
-    await session._handle_control({"type": "playback_done", "id": 1})
     assert list(session.history) == [{"role": "assistant", "content": "Sure, happy to help."}]
     await session.hang_up()
 
 
-# ---------- Deepgram utterance buffering ----------
+async def test_llm_failure_plays_the_apology(monkeypatch):
+    async def broken_stream(messages, *, model=None, max_tokens):
+        raise RuntimeError("provider down")
+        yield  # pragma: no cover
+
+    monkeypatch.setattr(call_module.llm, "stream_reply", broken_stream)
+    session, ws, _ = _session(call_greeting="")
+    await session.start()
+    await _wait_for_response(session)
+
+    assert ws.audio == [b"<llm_failed>"]
+    assert ws.events[-1] == {"type": "audio_end", "id": 1}
+    await session.hang_up()
 
 
-def _deepgram(safety_timeout_s=2.0):
-    speech, turns = [], []
+async def test_slow_llm_fills_the_silence(monkeypatch):
+    async def slow_stream(messages, *, model=None, max_tokens):
+        await asyncio.sleep(0.1)
+        yield "Here you go."
+
+    monkeypatch.setattr(call_module.llm, "stream_reply", slow_stream)
+    monkeypatch.setattr(call_module.settings, "LLM_SLOW_MS", 20)
+    session, ws, _ = _session(call_greeting="")
+    await session.start()
+    await _wait_for_response(session)
+
+    assert ws.audio[0] == b"<llm_slow>"
+    assert b"Here you go." in ws.audio[-1]
+    await session.hang_up()
+
+
+async def test_state_is_pushed_to_the_browser(fake_llm):
+    session, ws, _ = _session()
+    await _greeted(session)
+
+    await session.on_final("Can you help me?")
+
+    state = [e for e in ws.events if e["type"] == "state"][-1]
+    assert state["state"]["pending_text"] == "Can you help me?"
+    assert state["decision"] == {"action": "wait", "rule": "normal pause"}
+    await session.hang_up()
+
+
+# ---------- Deepgram ----------
+
+
+def _deepgram():
+    speech, finals = [], []
 
     async def on_speech(text):
         speech.append(text)
 
-    async def on_utterance(text):
-        turns.append(text)
+    async def on_final(text):
+        finals.append(text)
 
-    stt = DeepgramSTT(language="en", on_speech=on_speech, on_utterance=on_utterance, safety_timeout_s=safety_timeout_s)
-    return stt, speech, turns
-
-
-def _result(text, is_final=True, speech_final=False):
-    return {
-        "type": "Results",
-        "is_final": is_final,
-        "speech_final": speech_final,
-        "channel": {"alternatives": [{"transcript": text}]},
-    }
+    return DeepgramSTT(language="en", on_speech=on_speech, on_final=on_final), speech, finals
 
 
-async def test_deepgram_buffers_segments_until_speech_final():
-    stt, speech, turns = _deepgram()
-    await stt.handle_message(_result("I want to book", is_final=False))
+def _result(text, is_final=True):
+    return {"type": "Results", "is_final": is_final, "channel": {"alternatives": [{"transcript": text}]}}
+
+
+async def test_deepgram_splits_interim_and_final_results():
+    stt, speech, finals = _deepgram()
+    await stt.handle_message(_result("I want to", is_final=False))
     await stt.handle_message(_result("I want to book"))
-    await stt.handle_message(_result("a table for two", speech_final=True))
-
-    assert turns == ["I want to book a table for two"]
-    assert speech == ["I want to book", "I want to book", "a table for two"]
-    assert stt.utterance_buffer == []
-
-
-async def test_deepgram_utterance_end_flushes_buffer():
-    stt, _, turns = _deepgram()
-    await stt.handle_message(_result("hello there"))
+    await stt.handle_message(_result("", is_final=False))
     await stt.handle_message({"type": "UtteranceEnd"})
-    assert turns == ["hello there"]
 
-
-async def test_deepgram_safety_timer_flushes_buffer():
-    stt, _, turns = _deepgram(safety_timeout_s=0.05)
-    await stt.handle_message(_result("are you there"))
-    await asyncio.sleep(0.1)
-    assert turns == ["are you there"]
-
-
-async def test_deepgram_safety_timer_survives_turn_that_resets_stt():
-    """The timer completes the turn, and the turn handler resets the STT (as a barge-in does).
-    The timer must not cancel itself before the handler finishes."""
-    finished = []
-
-    async def on_speech(_):
-        pass
-
-    async def on_utterance(text):
-        stt.reset()
-        await asyncio.sleep(0.01)
-        finished.append(text)
-
-    stt = DeepgramSTT(language="en", on_speech=on_speech, on_utterance=on_utterance, safety_timeout_s=0.05)
-    await stt.handle_message(_result("one more thing"))
-    await asyncio.sleep(0.15)
-    assert finished == ["one more thing"]
+    assert speech == ["I want to"]
+    assert finals == ["I want to book"]

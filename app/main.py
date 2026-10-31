@@ -17,7 +17,7 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="Realtime Voice Agent", lifespan=lifespan)
+app = FastAPI(title="Beyond Words", lifespan=lifespan)
 app.include_router(assistants.router)
 app.include_router(realtime.router)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

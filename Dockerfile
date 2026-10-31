@@ -2,10 +2,11 @@ FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    DATABASE_URL=sqlite+aiosqlite:////data/voice_agent.db
+    DATABASE_URL=sqlite+aiosqlite:////data/voice_agent.db \
+    CALLS_DIR=/data/calls
 
 WORKDIR /srv
-COPY pyproject.toml README.md ./
+COPY pyproject.toml README.md policy.toml ./
 COPY app ./app
 COPY static ./static
 RUN pip install --no-cache-dir -e . \

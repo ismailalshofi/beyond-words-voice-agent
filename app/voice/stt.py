@@ -14,54 +14,38 @@ from app.settings import settings
 
 SAMPLE_RATE = 16000
 
-# Called with any recognised speech (partial or final) - used for barge-in
+# Called with the words being recognised right now (not stable yet)
 OnSpeech = Callable[[str], Awaitable[None]]
-# Called once per completed user turn
-OnUtterance = Callable[[str], Awaitable[None]]
+# Called with each stable segment. The STT doesn't decide when the turn ends, the policy does.
+OnFinal = Callable[[str], Awaitable[None]]
 
 
 class SpeechToText(Protocol):
     async def connect(self) -> None: ...
     async def send_audio(self, chunk: bytes) -> None: ...
     async def keep_alive(self) -> None: ...
-    def reset(self) -> None: ...
     async def close(self) -> None: ...
 
 
-def create_stt(provider: str, *, language: str, on_speech: OnSpeech, on_utterance: OnUtterance) -> SpeechToText:
+def create_stt(provider: str, *, language: str, on_speech: OnSpeech, on_final: OnFinal) -> SpeechToText:
     if provider == "scribe":
-        return ScribeSTT(language=language, on_speech=on_speech, on_utterance=on_utterance)
-    return DeepgramSTT(language=language, on_speech=on_speech, on_utterance=on_utterance)
+        return ScribeSTT(language=language, on_speech=on_speech, on_final=on_final)
+    return DeepgramSTT(language=language, on_speech=on_speech, on_final=on_final)
 
 
 class DeepgramSTT:
-    """Deepgram streaming STT with utterance buffering.
+    """Deepgram streaming STT.
 
-    Buffering strategy:
-    - is_final=true, speech_final=false -> stable segment, speaker still talking. Buffer it.
-    - is_final=true, speech_final=true  -> stable segment + speaker paused. Buffer it, complete the turn.
-    - is_final=false -> interim preview, used for barge-in but not buffered.
-    - UtteranceEnd event -> backup when noise blocks speech_final detection.
-    - Safety timer -> flushes the buffer if neither signal arrives.
+    - is_final=false -> interim words, used for barge-in and shown live.
+    - is_final=true  -> a stable segment, added to the caller's turn.
     """
 
     URL = "wss://api.deepgram.com/v1/listen"
 
-    def __init__(
-        self,
-        *,
-        language: str,
-        on_speech: OnSpeech,
-        on_utterance: OnUtterance,
-        safety_timeout_s: float = 2.0,
-    ):
+    def __init__(self, *, language: str, on_speech: OnSpeech, on_final: OnFinal):
         self.language = language or "en"
         self._on_speech = on_speech
-        self._on_utterance = on_utterance
-        self._safety_timeout_s = safety_timeout_s
-
-        self.utterance_buffer: list[str] = []
-        self._safety_timer_task: asyncio.Task | None = None
+        self._on_final = on_final
         self._ws: ClientConnection | None = None
         self._receiver: asyncio.Task | None = None
 
@@ -76,9 +60,8 @@ class DeepgramSTT:
                 "smart_format": "false",
                 "punctuate": "true",
                 "interim_results": "true",
+                # Short endpointing so segments become stable fast; the turn itself is the policy's call
                 "endpointing": 300,
-                "utterance_end_ms": 1000,
-                "vad_events": "true",
             }
         )
         self._ws = await connect(
@@ -96,12 +79,7 @@ class DeepgramSTT:
         if self._ws and self._ws.state is State.OPEN:
             await self._ws.send(json.dumps({"type": "KeepAlive"}))
 
-    def reset(self) -> None:
-        self.utterance_buffer.clear()
-        self._clear_safety_timer()
-
     async def close(self) -> None:
-        self.reset()
         if self._ws:
             with suppress(Exception):
                 await self._ws.send(json.dumps({"type": "CloseStream"}))
@@ -125,11 +103,6 @@ class DeepgramSTT:
             logger.warning(f"Deepgram receiver stopped: {e}")
 
     async def handle_message(self, data: dict) -> None:
-        if data.get("type") == "UtteranceEnd":
-            if self.utterance_buffer:
-                await self._complete_turn()
-            return
-
         if data.get("type") != "Results":
             return
 
@@ -138,58 +111,21 @@ class DeepgramSTT:
         if not sentence:
             return
 
-        # The call may barge in here, which resets this buffer
-        await self._on_speech(sentence)
-
-        if not data.get("is_final"):
-            # Interim result: speaker still talking, push the safety timer back
-            self._reset_safety_timer()
-            return
-
-        self.utterance_buffer.append(sentence)
-
-        if data.get("speech_final"):
-            await self._complete_turn()
+        if data.get("is_final"):
+            await self._on_final(sentence)
         else:
-            self._reset_safety_timer()
-
-    async def _complete_turn(self) -> None:
-        self._clear_safety_timer()
-        utterance = " ".join(self.utterance_buffer).strip()
-        self.utterance_buffer.clear()
-        if utterance:
-            await self._on_utterance(utterance)
-
-    def _reset_safety_timer(self) -> None:
-        self._clear_safety_timer()
-        self._safety_timer_task = asyncio.create_task(self._safety_timer())
-
-    async def _safety_timer(self) -> None:
-        try:
-            await asyncio.sleep(self._safety_timeout_s)
-            if self.utterance_buffer:
-                logger.info("[SAFETY_TIMER] Flushing buffer (speech_final never arrived)")
-                await self._complete_turn()
-        except asyncio.CancelledError:
-            pass
-
-    def _clear_safety_timer(self) -> None:
-        task = self._safety_timer_task
-        # Never cancel ourselves: the timer itself completes the turn through this path
-        if task and not task.done() and task is not asyncio.current_task():
-            task.cancel()
-        self._safety_timer_task = None
+            await self._on_speech(sentence)
 
 
 class ScribeSTT:
-    """ElevenLabs Scribe realtime STT. Scribe does its own VAD and commits whole turns."""
+    """ElevenLabs Scribe realtime STT. Scribe commits whole utterances with its own VAD."""
 
     URL = "wss://api.elevenlabs.io/v1/speech-to-text/realtime"
 
-    def __init__(self, *, language: str, on_speech: OnSpeech, on_utterance: OnUtterance):
+    def __init__(self, *, language: str, on_speech: OnSpeech, on_final: OnFinal):
         self.language = language
         self._on_speech = on_speech
-        self._on_utterance = on_utterance
+        self._on_final = on_final
         self._ws: ClientConnection | None = None
         self._receiver: asyncio.Task | None = None
 
@@ -228,9 +164,6 @@ class ScribeSTT:
         # The browser streams audio continuously, which keeps Scribe alive
         pass
 
-    def reset(self) -> None:
-        pass
-
     async def close(self) -> None:
         if self._ws:
             with suppress(Exception):
@@ -248,7 +181,7 @@ class ScribeSTT:
                 if message_type == "partial_transcript" and text:
                     await self._on_speech(text)
                 elif message_type == "committed_transcript" and text:
-                    await self._on_utterance(text)
+                    await self._on_final(text)
                 elif message_type and "error" in message_type:
                     logger.warning(f"Scribe error: {data}")
         except asyncio.CancelledError:

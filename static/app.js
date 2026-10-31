@@ -204,10 +204,12 @@ class Player {
   }
 
   checkDrained() {
-    if (this.sources.size || this.pendingEndId === null) return;
+    if (this.sources.size) return;
+    // Clips ("mm") have no response id, so going quiet and finishing a response are separate
+    this.speaking = false;
+    if (this.pendingEndId === null) return;
     const id = this.pendingEndId;
     this.pendingEndId = null;
-    this.speaking = false;
     this.onDrained?.(id);
   }
 
@@ -228,9 +230,43 @@ function setCallStatus(text) {
   $("call-status").textContent = text;
 }
 
+// ---------- Live state ----------
+
+const STATE_ROWS = [
+  ["Speaking", (s) => (s.agent_speaking ? "agent" : s.user_speaking ? "caller" : "nobody")],
+  ["Silence", (s) => `${s.silence_ms} ms`],
+  ["Usual pause", (s) => `${s.baseline_pause_ms} ms`],
+  ["End of turn", (s) => s.end_of_turn.toFixed(2)],
+  ["Turn so far", (s) => s.pending_text || "—"],
+  ["Words quiet", (s) => `${s.words_quiet_ms} ms`],
+  ["Reactions used", (s) => s.reactions.join(", ") || "—"],
+  ["Turns", (s) => s.turns],
+];
+
+function renderState(state, decision) {
+  const table = $("state-table");
+  table.innerHTML = "";
+  for (const [label, value] of STATE_ROWS) {
+    const row = table.insertRow();
+    row.insertCell().textContent = label;
+    row.insertCell().textContent = value(state);
+  }
+  $("state-decision").textContent = `${decision.action} · ${decision.rule}`;
+  $("state-decision").dataset.action = decision.action;
+
+  if (decision.action !== "wait") {
+    const log = $("decision-log");
+    const item = document.createElement("li");
+    item.textContent = `${(state.call_ms / 1000).toFixed(1)}s  ${decision.action} · ${decision.rule}`;
+    log.prepend(item);
+    while (log.children.length > 12) log.lastChild.remove();
+  }
+}
+
 async function startCall() {
   const transcript = $("call-transcript");
   transcript.innerHTML = "";
+  $("decision-log").innerHTML = "";
   setCallStatus("Connecting…");
   $("call-button").textContent = "End call";
 
@@ -287,6 +323,8 @@ async function startCall() {
       player.markEnd(data.id);
     } else if (data.type === "clear") {
       player.clear();
+    } else if (data.type === "state") {
+      renderState(data.state, data.decision);
     } else if (data.type === "error") {
       addMessage(transcript, "error", data.message);
     }

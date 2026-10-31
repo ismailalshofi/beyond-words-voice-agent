@@ -1,0 +1,41 @@
+name = "A short pause in the middle of a sentence is not the end of the turn"
+
+[[event]]
+at = 0
+speech = true
+
+[[event]]
+at = 300
+interim = "I'd like"
+
+[[event]]
+at = 1100
+final = "I'd like to book"
+
+[[event]]
+at = 1200
+speech = false
+
+[[event]]
+at = 1800
+speech = true
+
+[[event]]
+at = 2200
+interim = "a table"
+
+[[event]]
+at = 3000
+final = "a table for two."
+
+[[event]]
+at = 3100
+speech = false
+
+[[expect]]
+action = "respond"
+between = [3750, 3900]
+times = 1
+
+[[expect]]
+never = "backchannel"

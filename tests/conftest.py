@@ -6,3 +6,4 @@ from pathlib import Path
 _db_dir = tempfile.mkdtemp()
 os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{Path(_db_dir, 'test.db').as_posix()}"
 os.environ.setdefault("OPENAI_API_KEY", "test")
+os.environ["CALLS_DIR"] = ""

@@ -1,0 +1,79 @@
+# The policy: what the agent does at every moment of the call.
+#
+# Rules are checked from top to bottom, about 10 times a second. The first rule that matches wins,
+# and when nothing matches the agent waits. All conditions in a rule must hold.
+#
+# Timing is measured against the caller's own baseline pause (see app/listening/style.py),
+# so "1.5 x baseline" is longer for a slow talker than for a fast one.
+#
+# These numbers are a starting point. Tune them on real calls, and check every change with:
+#   python -m app.replay scenarios/
+
+[[rule]]
+name = "caller interrupts"
+action = "stop"
+when = { agent_speaking = true, interim_words_at_least = 2 }
+
+[[rule]]
+name = "agent is talking"
+action = "wait"
+when = { agent_speaking = true }
+
+# If the mic stays "on" because of background noise, the STT still stops giving words.
+# Trust the words over the mic, or the agent would wait forever.
+[[rule]]
+name = "words stopped"
+action = "respond"
+when = { has_pending_text = true, words_quiet_at_least_ms = 3000 }
+
+[[rule]]
+name = "caller is talking"
+action = "wait"
+when = { user_speaking = true }
+
+[[rule]]
+name = "heard a voice but no words"
+action = "repair"
+when = { has_pending_text = false, unheard_speech_at_least_ms = 600, silence_at_least_x_baseline = 2.0, not_reacted = "repair" }
+
+[[rule]]
+name = "long silence"
+action = "nudge"
+when = { has_pending_text = false, silence_at_least_ms = 8000, not_reacted = "nudge" }
+
+[[rule]]
+name = "nothing to answer"
+action = "wait"
+when = { has_pending_text = false }
+
+[[rule]]
+name = "normal pause"
+action = "wait"
+when = { silence_below_x_baseline = 1.0 }
+
+[[rule]]
+name = "caller is done"
+action = "respond"
+when = { end_of_turn_at_least = 0.7 }
+
+# The caller stopped mid-thought ("I was thinking that maybe..."). Jumping in here feels rude,
+# so the agent says a soft "mm" and keeps listening. No LLM, so it costs nothing.
+[[rule]]
+name = "thinking pause"
+action = "backchannel"
+when = { silence_at_least_x_baseline = 1.5, not_reacted = "backchannel" }
+
+[[rule]]
+name = "waited long enough"
+action = "respond"
+when = { silence_at_least_x_baseline = 3.0 }
+
+
+# Lines spoken without the LLM. They are rendered once per call in the agent's voice,
+# so they play with no TTS delay. When a kind has several lines, one is picked at random.
+[lines]
+backchannel = ["Mm-hmm.", "Mm."]
+nudge = ["Take your time.", "I'm still here whenever you're ready."]
+repair = ["Sorry, I missed that. Can you say it again?"]
+llm_slow = ["One moment."]
+llm_failed = ["Sorry, something went wrong on my side. Can you say that again?"]

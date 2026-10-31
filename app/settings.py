@@ -24,8 +24,14 @@ class Settings(BaseSettings):
     STT_PROVIDER: Literal["deepgram", "scribe"] = "deepgram"
     DEEPGRAM_API_KEY: str = ""
 
-    # Words of interim speech needed to interrupt the assistant mid-sentence
-    BARGE_IN_MIN_WORDS: int = 2
+    # The policy: rules for when the agent speaks, waits, says "mm" or stops
+    POLICY_FILE: str = "policy.toml"
+    POLICY_TICK_MS: int = 100
+    # No LLM token after this long: say a short "One moment." so the line isn't dead
+    LLM_SLOW_MS: int = 1500
+
+    # Every call's events and latencies are saved here as JSON. Empty to disable.
+    CALLS_DIR: str = "calls"
 
 
 settings = Settings()

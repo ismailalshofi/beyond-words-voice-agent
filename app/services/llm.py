@@ -36,8 +36,12 @@ def system_prompt(assistant: Assistant, channel: Channel) -> str:
     return prompt
 
 
-def build_messages(assistant: Assistant, history: Iterable[dict], channel: Channel) -> list[dict]:
-    return [{"role": "system", "content": system_prompt(assistant, channel)}, *history]
+def build_messages(assistant: Assistant, history: Iterable[dict], channel: Channel, guidance: str = "") -> list[dict]:
+    """`guidance` comes from the policy rule that decided to respond, e.g. "keep it to one sentence"."""
+    prompt = system_prompt(assistant, channel)
+    if guidance:
+        prompt += f"\n\nFor this reply: {guidance}"
+    return [{"role": "system", "content": prompt}, *history]
 
 
 def greeting_messages(assistant: Assistant, channel: Channel) -> list[dict]:

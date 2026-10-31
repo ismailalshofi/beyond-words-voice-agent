@@ -1,0 +1,38 @@
+name = "Two words stop the agent, a 'yeah' doesn't"
+
+[[event]]
+at = 0
+agent = true
+
+[[event]]
+at = 700
+interim = "yeah"
+
+[[event]]
+at = 1400
+speech = true
+
+[[event]]
+at = 1500
+interim = "wait hold on"
+
+[[event]]
+at = 1900
+final = "Wait, hold on."
+
+[[event]]
+at = 2000
+speech = false
+
+[[expect]]
+never = "stop"
+before = 1500
+
+[[expect]]
+action = "stop"
+between = [1500, 1550]
+times = 1
+
+[[expect]]
+action = "respond"
+between = [2650, 2800]
