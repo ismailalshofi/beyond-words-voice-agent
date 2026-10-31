@@ -1,0 +1,133 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; background: #ffffff; }
+  svg { display: block; font-family: "Inter", "Segoe UI", sans-serif; }
+  .box { fill: #ffffff; stroke: #cfccc4; stroke-width: 2; }
+  .next { fill: #ffffff; stroke: #cfccc4; stroke-width: 2; stroke-dasharray: 7 6; }
+  .policy { fill: #e5effa; stroke: #2f74d0; stroke-width: 3; }
+  .clips { fill: #fdeee8; stroke: #e8663d; stroke-width: 3; }
+  .t { font-size: 22px; font-weight: 700; fill: #111; text-anchor: middle; }
+  .tn { font-size: 22px; font-weight: 400; fill: #111; text-anchor: middle; }
+  .s { font-size: 19px; fill: #555; text-anchor: middle; }
+  .muted { fill: #9a978f; }
+  .label { font-size: 18px; fill: #555; }
+  .title { font-size: 26px; font-weight: 600; fill: #111; }
+  .tag { font-size: 13px; font-weight: 600; fill: #9a978f; letter-spacing: .08em; }
+  .line { fill: none; stroke: #c5c2b9; stroke-width: 2; marker-end: url(#arrow); }
+  .line2 { fill: none; stroke: #c5c2b9; stroke-width: 2; }
+  .dline { fill: none; stroke: #c5c2b9; stroke-width: 2; stroke-dasharray: 7 6; marker-end: url(#arrow); }
+</style>
+</head>
+<body>
+<svg id="d" width="1440" height="830" viewBox="0 0 1440 830" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#c5c2b9"/>
+    </marker>
+  </defs>
+
+  <text class="title" x="40" y="52">Parallel signals feed one state; the policy decides, the LLM speaks only when told</text>
+
+  <!-- Inputs from above -->
+  <rect class="box" x="560" y="90" width="300" height="80" rx="12"/>
+  <text class="t" x="710" y="124">Agent playback</text>
+  <text class="s" x="710" y="153">is the agent talking?</text>
+  <path class="line" d="M710,170 V212"/>
+
+  <rect class="box" x="900" y="90" width="300" height="80" rx="12"/>
+  <text class="t" x="1050" y="124">policy.toml</text>
+  <text class="s" x="1050" y="153">rules and short lines</text>
+  <path class="line" d="M1000,170 V368"/>
+
+  <!-- Mic -->
+  <rect class="box" x="40" y="395" width="200" height="90" rx="12"/>
+  <text class="tn" x="140" y="432">Browser mic</text>
+  <text class="s" x="140" y="461">live voice</text>
+
+  <!-- Fan-out -->
+  <text class="label" x="305" y="200">run in parallel</text>
+  <path class="line2" d="M240,440 H272"/>
+  <path class="line2" d="M272,250 V710"/>
+  <path class="line" d="M272,250 H302"/>
+  <path class="line" d="M272,335 H302"/>
+  <path class="line" d="M272,420 H302"/>
+  <path class="line" d="M272,505 H302"/>
+  <path class="dline" d="M272,605 H302"/>
+  <path class="dline" d="M272,710 H302"/>
+
+  <!-- Listening modules -->
+  <rect class="box" x="305" y="215" width="270" height="70" rx="12"/>
+  <text class="t" x="440" y="245">Voice activity</text>
+  <text class="s" x="440" y="272">is anyone making sound?</text>
+
+  <rect class="box" x="305" y="300" width="270" height="70" rx="12"/>
+  <text class="t" x="440" y="330">Transcript (STT)</text>
+  <text class="s" x="440" y="357">what was said</text>
+
+  <rect class="box" x="305" y="385" width="270" height="70" rx="12"/>
+  <text class="t" x="440" y="415">End-of-turn</text>
+  <text class="s" x="440" y="442">is the caller done?</text>
+
+  <rect class="box" x="305" y="470" width="270" height="70" rx="12"/>
+  <text class="t" x="440" y="500">Speaking style</text>
+  <text class="s" x="440" y="527">this caller's usual pause</text>
+
+  <text class="tag" x="305" y="563">NEXT</text>
+  <rect class="next" x="305" y="570" width="270" height="70" rx="12"/>
+  <text class="t muted" x="440" y="600">Emotion (voice)</text>
+  <text class="s muted" x="440" y="627">how the voice sounds</text>
+
+  <rect class="next" x="305" y="675" width="270" height="70" rx="12"/>
+  <text class="t muted" x="440" y="705">Guardrails</text>
+  <text class="s muted" x="440" y="732">checked before every rule</text>
+
+  <!-- Into the state -->
+  <path class="line" d="M575,250 H628"/>
+  <path class="line" d="M575,335 H628"/>
+  <path class="line" d="M575,420 H628"/>
+  <path class="line" d="M575,505 H628"/>
+  <path class="dline" d="M575,605 H628"/>
+  <path class="dline" d="M575,710 H628"/>
+
+  <!-- State -->
+  <rect class="box" x="630" y="215" width="160" height="530" rx="14"/>
+  <text class="t" x="710" y="470">State</text>
+  <text class="s" x="710" y="499">facts only</text>
+
+  <path class="line" d="M790,455 H898"/>
+
+  <!-- Policy -->
+  <rect class="policy" x="900" y="370" width="200" height="170" rx="14"/>
+  <text class="t" x="1000" y="427">Policy</text>
+  <text class="s" x="1000" y="458">what to do next</text>
+  <text class="s" x="1000" y="486">first rule that</text>
+  <text class="s" x="1000" y="512">matches wins</text>
+
+  <!-- Outputs -->
+  <path class="line" d="M1100,410 H1140 V290 H1168"/>
+  <rect class="box" x="1170" y="245" width="200" height="80" rx="12"/>
+  <text class="t" x="1270" y="279">LLM</text>
+  <text class="s" x="1270" y="307">writes the reply</text>
+
+  <path class="line" d="M1270,325 V428"/>
+  <rect class="box" x="1170" y="430" width="200" height="80" rx="12"/>
+  <text class="t" x="1270" y="464">Voice out</text>
+  <text class="s" x="1270" y="492">streaming TTS</text>
+
+  <path class="line" d="M1100,500 H1140 V630 H1168"/>
+  <rect class="clips" x="1170" y="585" width="200" height="90" rx="12"/>
+  <text class="t" x="1270" y="619">Fast reactions</text>
+  <text class="s" x="1270" y="647">"mm", no LLM</text>
+
+  <!-- Back to the caller -->
+  <path class="line2" d="M1270,510 V545 H1405 V790"/>
+  <path class="line2" d="M1270,675 V790"/>
+  <path class="line" d="M1405,790 H140 V487"/>
+  <text class="label" x="700" y="818" text-anchor="middle">the agent speaks back to the caller</text>
+</svg>
+</body>
+</html>

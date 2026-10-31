@@ -18,20 +18,9 @@ The short version: signals from the audio run next to the transcript and go into
 
 ## The big picture
 
-```
-                  ┌─────────────────────────────┐
- mic audio ──────▶│ Voice activity   (local)    │──┐
-                  │ Transcript       (STT)      │  │    ┌─────────┐    ┌──────────┐
-                  │ End of turn                 │  ├───▶│  STATE  │───▶│  POLICY  │
-                  │ Speaking style  (baseline)  │  │    └─────────┘    └────┬─────┘
- agent playback ─▶│ (emotion, guardrails: next) │──┘                        │
-                  └─────────────────────────────┘          ┌────────────────┼──────────────────┐
-                    they only report, never decide         ▼                ▼                  ▼
-                                                         wait      "mm" / "take your time"    respond
-                                                                    (clip, no LLM)      LLM ─▶ TTS ─▶ caller
-```
+![Architecture: parallel signals feed one state, the policy decides, the LLM speaks only when told](docs/architecture.png)
 
-The boxes on the left run all the time during the call. They don't decide anything, they only report what they see. The state keeps the latest facts. The policy is the main part, because it sits in the middle and it is what drives the agent.
+The boxes on the left run all the time during the call. They don't decide anything, they only report what they see. The state keeps the latest facts. The policy is the main part, because it sits in the middle and it is what drives the agent. The dashed boxes are next on the list.
 
 ## What the agent listens to
 
