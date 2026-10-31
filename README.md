@@ -10,6 +10,10 @@ I started by imagining one call, second by second, and asking at every moment: w
 
 The short version: signals from the audio run next to the transcript and go into one **state**. A **policy** in the middle decides what the agent does, and only then does the LLM speak.
 
+![The live state panel during a call](docs/live-state.gif)
+
+*The panel next to the transcript shows what the agent hears and every decision of the policy. The caller stops mid-sentence ("a table for…"), so the agent says "mm" instead of answering. When the sentence is done, it answers. When the caller cuts in with two words, it stops. This recording replays a scripted caller through the real listener and `policy.toml` with a fake clock, so the timings are the policy's own.*
+
 ---
 
 ## The big picture
@@ -250,13 +254,6 @@ No API keys needed: every provider is faked.
 - **Style across calls.** Keep each caller's rhythm between calls, not only within one.
 - **Memory and cut calls.** If the line drops, the next call continues where it stopped.
 - **WebRTC and phones**, for echo cancellation and real network conditions.
-
-## Limitations
-
-- **No auth or rate limiting.** It's built to run locally. Before you expose it, add auth, or anyone who can reach it can spend your API keys.
-- **The end-of-turn signal is a heuristic** on the words. It is good enough to show the idea, and it is the first thing I would replace.
-- **The voice activity is energy-based.** It works with the browser's noise suppression on, but a loud room can fool it. Rule 3 is the safety net.
-- **Heard-text is an estimate.** It assumes the browser plays audio continuously from the first chunk. Jitter or a playback underrun can shift it by a word or two.
 
 ## License
 
