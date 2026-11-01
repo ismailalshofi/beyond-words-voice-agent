@@ -2,14 +2,20 @@ import asyncio
 import json
 from pathlib import Path
 
+import httpx
+import openai
 import pytest
 from starlette.websockets import WebSocketState
+from websockets.datastructures import Headers
+from websockets.exceptions import InvalidStatus
+from websockets.http11 import Response
 
 from app.listening.listener import Listener
 from app.listening.policy import Policy
 from app.models import Assistant
 from app.services import call as call_module
 from app.services.call import CallSession
+from app.services.provider_errors import ProviderError
 from app.voice.spoken_timeline import PCM16_16K_BYTES_PER_MS
 from app.voice.stt import DeepgramSTT
 
@@ -305,6 +311,37 @@ async def test_llm_failure_plays_the_apology(monkeypatch):
 
     assert ws.audio == [b"<llm_failed>"]
     assert ws.events[-1] == {"type": "audio_end", "id": 1}
+    await session.hang_up()
+
+
+async def test_rejected_stt_key_is_named_not_a_traceback(monkeypatch):
+    class RejectedSTT(FakeSTT):
+        async def connect(self):
+            raise InvalidStatus(Response(401, "Unauthorized", Headers()))
+
+    monkeypatch.setattr(call_module.settings, "STT_PROVIDER", "deepgram")
+    session, _, _ = _session()
+    session.stt = RejectedSTT()
+
+    with pytest.raises(ProviderError, match="Deepgram rejected the API key. Check DEEPGRAM_API_KEY in .env."):
+        await session.start()
+    await session.hang_up()
+
+
+async def test_rejected_llm_key_tells_the_browser_which_key(monkeypatch):
+    async def rejected_stream(messages, *, model=None, max_tokens):
+        response = httpx.Response(401, request=httpx.Request("POST", "https://api.openai.com/v1/chat/completions"))
+        raise openai.AuthenticationError("Incorrect API key provided", response=response, body=None)
+        yield  # pragma: no cover
+
+    monkeypatch.setattr(call_module.llm, "stream_reply", rejected_stream)
+    session, ws, _ = _session(call_greeting="")
+    await session.start()
+    await _wait_for_response(session)
+
+    assert ws.audio == [b"<llm_failed>"]
+    error = {"type": "error", "message": "The LLM provider rejected the API key. Check OPENAI_API_KEY in .env."}
+    assert error in ws.events
     await session.hang_up()
 
 

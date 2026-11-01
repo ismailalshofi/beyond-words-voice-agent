@@ -13,7 +13,8 @@ from app.listening.listener import Listener
 from app.listening.policy import FAST_REACTIONS, WAIT, Decision, Policy
 from app.listening.state import CallState
 from app.models import Assistant
-from app.services import llm
+from app.services import llm, provider_errors
+from app.services.provider_errors import ProviderError
 from app.settings import settings
 from app.voice.call_logger import CallLogger
 from app.voice.clips import Clips
@@ -93,6 +94,7 @@ class CallSession:
         self._first_audio_at: float | None = None
         self._reply_committed = True
         self._llm_failed = False
+        self._llm_error = ""
 
         self._decide_lock = asyncio.Lock()
         self._last_decision: Decision = WAIT
@@ -117,6 +119,9 @@ class CallSession:
                         break
         except WebSocketDisconnect:
             pass
+        except ProviderError as e:
+            logger.error(f"Call could not start: {e}")
+            await self._send_event({"type": "error", "message": str(e)})
         except Exception:
             logger.exception("Call failed")
             await self._send_event({"type": "error", "message": "The call failed. Check the server logs."})
@@ -126,7 +131,10 @@ class CallSession:
     async def start(self) -> None:
         self.is_active = True
         # Open both provider sockets in parallel to keep call setup fast
-        await asyncio.gather(self.tts.connect(), self.stt.connect())
+        results = await asyncio.gather(self.tts.connect(), self.stt.connect(), return_exceptions=True)
+        for provider, result in zip((provider_errors.TTS, provider_errors.stt_provider()), results, strict=True):
+            if isinstance(result, Exception):
+                raise ProviderError(provider_errors.explain(provider, result)) from result
         for job, name in (
             (self._keep_alive(), "keep_alive"),
             (self._policy_loop(), "policy"),
@@ -258,6 +266,7 @@ class CallSession:
 
         if self._llm_failed:
             await self._say_line("llm_failed")
+            await self._send_event({"type": "error", "message": self._llm_error})
         elif self._first_audio_at is None and self._reply_text:
             # The text exists but the voice didn't come: at least the transcript shows the reply
             await self._send_event({"type": "error", "message": "The voice failed. The reply is shown as text."})
@@ -275,9 +284,13 @@ class CallSession:
                     first = False
                 yield chunk
             self.call_logger.add_log("llm", "last_chunk_received", "Last chunk received")
-        except Exception:
+        except Exception as e:
             # End the text cleanly so whatever was said gets spoken, then apologise (see _respond)
-            logger.exception("LLM stream failed")
+            self._llm_error = provider_errors.explain(provider_errors.LLM, e)
+            if provider_errors.is_key_problem(e):
+                logger.error(self._llm_error)
+            else:
+                logger.exception("LLM stream failed")
             self._llm_failed = True
         finally:
             slow.cancel()

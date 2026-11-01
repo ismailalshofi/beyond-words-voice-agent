@@ -4,7 +4,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 from loguru import logger
 
 from app.models import Assistant
-from app.services import llm
+from app.services import llm, provider_errors
 from app.settings import settings
 
 HISTORY_LIMIT = 30
@@ -57,11 +57,13 @@ class ChatSession:
                 await self.ws.send_json({"type": "delta", "text": delta})
         except WebSocketDisconnect:
             raise
-        except Exception:
-            logger.exception("Chat reply failed")
-            await self.ws.send_json(
-                {"type": "error", "message": "The assistant could not reply. Check the server logs."}
-            )
+        except Exception as e:
+            message = provider_errors.explain(provider_errors.LLM, e)
+            if provider_errors.is_key_problem(e):
+                logger.error(message)
+            else:
+                logger.exception("Chat reply failed")
+            await self.ws.send_json({"type": "error", "message": message})
             return
 
         reply = "".join(parts).strip()
