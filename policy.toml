@@ -31,10 +31,12 @@ name = "caller is talking"
 action = "wait"
 when = { user_speaking = true }
 
+# The STT can send its words a second or more after the mic hears the caller stop (Scribe more
+# than Deepgram), so give the words 2 s to arrive before saying "sorry, I missed that".
 [[rule]]
 name = "heard a voice but no words"
 action = "repair"
-when = { has_pending_text = false, unheard_speech_at_least_ms = 600, silence_at_least_x_baseline = 2.0, not_reacted = "repair" }
+when = { has_pending_text = false, unheard_speech_at_least_ms = 600, silence_at_least_x_baseline = 2.0, silence_at_least_ms = 2000, not_reacted = "repair" }
 
 [[rule]]
 name = "long silence"

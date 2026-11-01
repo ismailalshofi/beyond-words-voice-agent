@@ -138,6 +138,18 @@ def test_take_turn_hands_over_the_text_and_resets():
     assert state.turns == 1
 
 
+def test_repair_is_said_once_per_turn_but_mm_can_come_again():
+    listener = Listener(clock=Clock())
+    listener.mark_reaction("backchannel")
+    listener.mark_reaction("repair")
+
+    listener.set_user_speaking(True)
+    assert listener.state().reactions == frozenset({"repair"})
+
+    listener.take_turn()
+    assert listener.state().reactions == frozenset()
+
+
 def test_speech_without_words_is_tracked():
     clock = Clock()
     listener = Listener(clock=clock)

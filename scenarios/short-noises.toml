@@ -1,0 +1,30 @@
+name = "A few short noises are not a voice the agent missed"
+
+# A breath, a chair, a keyboard: each under half a second. Together they pass 600 ms,
+# but no single one sounds like someone saying something.
+[[event]]
+at = 0
+speech = true
+
+[[event]]
+at = 400
+speech = false
+
+[[event]]
+at = 1500
+speech = true
+
+[[event]]
+at = 1800
+speech = false
+
+[[event]]
+at = 3000
+speech = true
+
+[[event]]
+at = 3400
+speech = false
+
+[[expect]]
+never = "repair"

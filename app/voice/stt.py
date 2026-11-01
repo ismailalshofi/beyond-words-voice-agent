@@ -134,7 +134,9 @@ class ScribeSTT:
             "model_id": "scribe_v2_realtime",
             "audio_format": f"pcm_{SAMPLE_RATE}",
             "commit_strategy": "vad",
-            "vad_silence_threshold_secs": 0.8,
+            # Short, like Deepgram's endpointing: the policy waits for the turn, not Scribe.
+            # At 0.8 s every reply waited 0.8 s for the last words.
+            "vad_silence_threshold_secs": 0.4,
             "vad_threshold": 0.45,
             "min_silence_duration_ms": 300,
             "min_speech_duration_ms": 200,

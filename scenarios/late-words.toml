@@ -1,0 +1,27 @@
+name = "Words that arrive after the voice stopped still count as heard"
+
+# Scribe sends its text up to a second after the mic hears the caller stop.
+# The voice was heard, so the agent answers. It doesn't say "sorry, I missed that".
+[[event]]
+at = 0
+speech = true
+
+[[event]]
+at = 900
+speech = false
+
+# The first words come 1.5 s after the voice stopped: later than 2 x the usual pause
+[[event]]
+at = 2400
+interim = "What time do you open"
+
+[[event]]
+at = 3200
+final = "What time do you open?"
+
+[[expect]]
+action = "respond"
+times = 1
+
+[[expect]]
+never = "repair"

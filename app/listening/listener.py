@@ -6,6 +6,10 @@ from app.listening.style import SpeakingStyle
 from app.listening.turn_end import TextTurnEnd, TurnEndModel
 from app.listening.vad import VoiceActivity
 
+# Reactions that stay said until the next turn. "mm" can come again after the caller speaks,
+# "sorry, I missed that" can't: asking twice in one turn sounds broken.
+ONCE_PER_TURN = frozenset({"repair"})
+
 
 class Listener:
     """Turns the raw signals of a call into the state.
@@ -63,11 +67,12 @@ class Listener:
                 self.style.add_pause((now - self._user_stopped_at) * 1000)
             self._speech_started_at = now
             self._words_since_speech = False
-            self._reactions.clear()
+            self._reactions &= ONCE_PER_TURN
         else:
             self._user_stopped_at = now
             if self._speech_started_at is not None and not self._words_since_speech:
-                self._unheard_ms += (now - self._speech_started_at) * 1000
+                # The longest single stretch, not a sum: a few short noises are not one voice
+                self._unheard_ms = max(self._unheard_ms, (now - self._speech_started_at) * 1000)
             if not self._agent_speaking:
                 self._quiet_since = now
 
@@ -118,7 +123,7 @@ class Listener:
 
         unheard_ms = self._unheard_ms
         if self._user_speaking and not self._words_since_speech and self._speech_started_at is not None:
-            unheard_ms += (now - self._speech_started_at) * 1000
+            unheard_ms = max(unheard_ms, (now - self._speech_started_at) * 1000)
 
         return CallState(
             call_ms=(now - self._started_at) * 1000,
@@ -138,4 +143,6 @@ class Listener:
     def _heard_words(self) -> None:
         self._last_words_at = self._clock()
         self._words_since_speech = True
+        # Words prove the voice was heard. The STT can be ~1 s behind the mic (Scribe more than
+        # Deepgram), so this also clears voice the VAD already closed as "no words"
         self._unheard_ms = 0.0
