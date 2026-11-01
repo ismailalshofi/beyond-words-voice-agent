@@ -7,7 +7,10 @@ from app.settings import settings
 
 # (name shown to the user, the .env key it needs)
 TTS = ("ElevenLabs", "ELEVENLABS_API_KEY")
-LLM = ("The LLM provider", "OPENAI_API_KEY")
+LLM = {
+    "openai": ("The LLM provider", "OPENAI_API_KEY"),
+    "google": ("Google Gemini", "GOOGLE_API_KEY"),
+}
 STT = {
     "deepgram": ("Deepgram", "DEEPGRAM_API_KEY"),
     "scribe": ("ElevenLabs Scribe", "ELEVENLABS_API_KEY"),
@@ -22,6 +25,10 @@ def stt_provider() -> tuple[str, str]:
     return STT.get(settings.STT_PROVIDER, (settings.STT_PROVIDER, "the STT key"))
 
 
+def llm_provider() -> tuple[str, str]:
+    return LLM[settings.LLM_PROVIDER]
+
+
 def status_of(error: Exception) -> int | None:
     if isinstance(error, InvalidStatus):
         return error.response.status_code
@@ -31,18 +38,20 @@ def status_of(error: Exception) -> int | None:
 
 
 def is_key_problem(error: Exception) -> bool:
-    return status_of(error) in (401, 403)
+    status = status_of(error)
+    # Gemini answers a bad key with 400 "API key not valid" instead of 401
+    return status in (401, 403) or (status == 400 and "api key" in str(error).lower())
 
 
 def explain(provider: tuple[str, str], error: Exception) -> str:
     name, key = provider
     status = status_of(error)
-    if status in (401, 403):
+    if is_key_problem(error):
         return f"{name} rejected the API key. Check {key} in .env."
     if status == 402:
         return f"{name} says the account is out of credit."
     if status == 429:
         return f"{name} is rate limiting the requests. Try again in a minute."
     if isinstance(error, openai.APIConnectionError):
-        return f"Could not reach {name}. Check the internet connection or OPENAI_BASE_URL."
+        return f"Could not reach {name}. Check the internet connection."
     return f"{name} failed: {error}"

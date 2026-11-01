@@ -17,14 +17,34 @@ CALL_STYLE = (
 
 GREETING_INSTRUCTION = "[The conversation has just started. Greet the user in one short sentence, in character.]"
 
+GOOGLE_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+
+# Model and reasoning effort when .env doesn't set them.
+# Gemini Flash thinks by default, which adds seconds before the first word: off for a voice call.
+DEFAULTS = {
+    "openai": {"model": "gpt-4.1-mini", "reasoning_effort": ""},
+    "google": {"model": "gemini-2.5-flash", "reasoning_effort": "none"},
+}
+
 _client: AsyncOpenAI | None = None
 
 
 def get_client() -> AsyncOpenAI:
     global _client
     if _client is None:
-        _client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY, base_url=settings.OPENAI_BASE_URL)
+        if settings.LLM_PROVIDER == "google":
+            _client = AsyncOpenAI(api_key=settings.GOOGLE_API_KEY, base_url=GOOGLE_BASE_URL)
+        else:
+            _client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY, base_url=settings.OPENAI_BASE_URL)
     return _client
+
+
+def default_model() -> str:
+    return settings.LLM_MODEL or DEFAULTS[settings.LLM_PROVIDER]["model"]
+
+
+def reasoning_effort() -> str:
+    return settings.LLM_REASONING_EFFORT or DEFAULTS[settings.LLM_PROVIDER]["reasoning_effort"]
 
 
 def system_prompt(assistant: Assistant, channel: Channel) -> str:
@@ -50,11 +70,13 @@ def greeting_messages(assistant: Assistant, channel: Channel) -> list[dict]:
 
 async def stream_reply(messages: list[dict], *, model: str | None = None, max_tokens: int) -> AsyncIterator[str]:
     """Yield text deltas from the chat completion stream."""
+    extra = {"reasoning_effort": reasoning_effort()} if reasoning_effort() else {}
     stream = await get_client().chat.completions.create(
-        model=model or settings.LLM_MODEL,
+        model=model or default_model(),
         messages=messages,
         stream=True,
         max_completion_tokens=max_tokens,
+        **extra,
     )
     try:
         async for event in stream:

@@ -22,7 +22,7 @@ class Assistant(Base):
     # ElevenLabs voice; falls back to settings.DEFAULT_VOICE_ID
     voice_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     language: Mapped[str] = mapped_column(String(16), default="en")
-    # Falls back to settings.LLM_MODEL
+    # Falls back to settings.LLM_MODEL, then the provider's default
     llm_model: Mapped[str | None] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)

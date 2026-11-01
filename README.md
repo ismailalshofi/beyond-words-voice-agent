@@ -183,9 +183,12 @@ Open http://localhost:8000, create an assistant, and start a call. The panel nex
 
 | Variable | Purpose |
 |---|---|
-| `OPENAI_API_KEY` | LLM key |
-| `OPENAI_BASE_URL` | Optional. Any OpenAI-compatible API, e.g. Groq |
-| `LLM_MODEL` | Default model when an assistant doesn't set one |
+| `LLM_PROVIDER` | `openai` (default) or `google` for Gemini |
+| `OPENAI_API_KEY` | LLM key when `LLM_PROVIDER=openai` |
+| `OPENAI_BASE_URL` | Optional. Any OpenAI-compatible API, e.g. OpenRouter or Groq |
+| `GOOGLE_API_KEY` | Gemini key when `LLM_PROVIDER=google` (free from Google AI Studio) |
+| `LLM_MODEL` | Default model when an assistant doesn't set one. Empty means `gpt-4.1-mini` on OpenAI, `gemini-2.5-flash` on Google |
+| `LLM_REASONING_EFFORT` | Empty means the provider's default. On Google it is `none`: thinking adds seconds before the first word, too slow for a call |
 | `ELEVENLABS_API_KEY` | Text to speech (and Scribe STT) |
 | `ELEVENLABS_MODEL_ID` | Defaults to `eleven_flash_v2_5` (lowest latency) |
 | `DEFAULT_VOICE_ID` | Voice used when an assistant doesn't set one |

@@ -286,7 +286,7 @@ class CallSession:
             self.call_logger.add_log("llm", "last_chunk_received", "Last chunk received")
         except Exception as e:
             # End the text cleanly so whatever was said gets spoken, then apologise (see _respond)
-            self._llm_error = provider_errors.explain(provider_errors.LLM, e)
+            self._llm_error = provider_errors.explain(provider_errors.llm_provider(), e)
             if provider_errors.is_key_problem(e):
                 logger.error(self._llm_error)
             else:

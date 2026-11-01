@@ -58,7 +58,7 @@ class ChatSession:
         except WebSocketDisconnect:
             raise
         except Exception as e:
-            message = provider_errors.explain(provider_errors.LLM, e)
+            message = provider_errors.explain(provider_errors.llm_provider(), e)
             if provider_errors.is_key_problem(e):
                 logger.error(message)
             else:

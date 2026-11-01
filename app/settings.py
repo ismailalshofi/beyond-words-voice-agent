@@ -8,10 +8,16 @@ class Settings(BaseSettings):
 
     DATABASE_URL: str = "sqlite+aiosqlite:///./voice_agent.db"
 
-    # LLM (any OpenAI-compatible endpoint works, e.g. Groq via OPENAI_BASE_URL)
+    # LLM. "openai" also covers any OpenAI-compatible endpoint (OpenRouter, Groq) via OPENAI_BASE_URL.
+    # "google" is Gemini, through Google's OpenAI-compatible endpoint.
+    LLM_PROVIDER: Literal["openai", "google"] = "openai"
     OPENAI_API_KEY: str = ""
     OPENAI_BASE_URL: str | None = None
-    LLM_MODEL: str = "gpt-4.1-mini"
+    GOOGLE_API_KEY: str = ""
+    # Empty means the provider's default (see app/services/llm.py)
+    LLM_MODEL: str = ""
+    # "none" turns thinking off on models that think by default. Empty means the provider's default.
+    LLM_REASONING_EFFORT: str = ""
     CALL_MAX_TOKENS: int = 250
     CHAT_MAX_TOKENS: int = 1024
 
